@@ -1,8 +1,12 @@
 openS3
 ======
 
-Python 3 &amp; AWS S3
+Python 3 & AWS S3
 
+Status
+------
+
+|docs|
 
 Installation
 ============
@@ -28,3 +32,16 @@ Usage
     ... with openS3('/my/object/key.txt') as fd:
     ...     print(fd.read())
     b'Yeah! Files going up to S3!'
+
+
+Further Documentation
+=====================
+
+Further documentation can be found on `Read the Docs`_.
+
+.. _Read the Docs: http://opens3.readthedocs.org/en/latest/
+
+.. |docs| image:: https://readthedocs.org/projects/opens3/badge/
+    :alt: Documentation Status
+    :scale: 100%
+    :target: http://opens3.readthedocs.org/en/latest/
