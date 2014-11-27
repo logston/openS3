@@ -19,3 +19,10 @@ MEDIA_TYPES = {
 
 # AWS Datetime Format:  Wed, 28 Oct 2009 22:32:00 GMT
 AWS_DATETIME_FORMAT = '%a, %d %b %Y %X %Z'
+
+VALID_MODES = {
+    'read': 'r',
+    'write': 'w',
+    'append': 'a',
+    'read-write': 'r+'
+}

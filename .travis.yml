@@ -1,0 +1,12 @@
+language: python
+python:
+- '3.3'
+- '3.4'
+install: true
+script:
+- python tests.py
+env:
+  global:
+  - secure: Zx/OKrsH+6788H+qSIuFd2DKVybIV47iR/OId+2jMBTZY64pGJfP1S0uzUdX/C9uHMXgZf+rCb9JwvdsygrsEPGXtdwRVF0h5w1YmbQn6guv+enaUDHC260cSZFdYviahitWGFpE5QTCGvGvUGfIZHZkcW6DrC9LCXQQ/dKDQ9s=
+  - secure: D5wyVtzwYTDA1nBgfTuWq55IxTlE1Rx7ZtJgXzCAl70dNMyAuVG1zPc/9Y9Jyz9OOPpedcUaXXM+XpMB/XhGx50FRB2QazkE7JG36T03Fw3+2iOwnlADbYbJtcr9eyFYl2hSh7gr54zPIbEQRzojRWHgR/jRH2BzRZsMBAUUzYM=
+  - secure: dbC+Roq+CdmIqO9ATT9dNtUIlLUfzoyhSkFOi/69fuyBljtbUH9at035/ATXFZFAD/FWe31bNhtcwUj0aGuRrh1uVvAtCOykX5jbau3MOigLOqnKrwLl2FgK5xwtRDwnJCvi4+DVdrMo/nFz2N0x6jYTTw1DMAdhz3bW+f383RI=

@@ -25,6 +25,7 @@ def get_valid_filename(string_to_clean):
     filename. Specifically, leading and trailing spaces are removed; other
     spaces are converted to underscores; and anything that is not a unicode
     alphanumeric, dash, underscore, or dot, is removed.
+
     >>> get_valid_filename("john's portrait in 2004.jpg")
     'johns_portrait_in_2004.jpg'
     """
@@ -35,7 +36,7 @@ def get_valid_filename(string_to_clean):
 def validate_values(validation_func, dic):
     """
     Validate each value in ``dic`` by passing it through ``func``.
-    Raise a ``ValueError`` if ``func`` does not return ``True``.
+    Raise a ``ValueError`` if ``validation_func`` does not return ``True``.
     """
     for value_name, value in dic.items():
         if not validation_func(value):
@@ -51,7 +52,9 @@ def strpawstime(timestamp):
 
 
 class S3IOError(IOError):
-    pass
+    """
+    Generic exception class for S3 communication errors.
+    """
 
 
 class S3FileDoesNotExistError(S3IOError):
@@ -63,14 +66,24 @@ class S3FileDoesNotExistError(S3IOError):
 
 
 class OpenS3(object):
+    """
+    A context manager for interfacing with S3.
+    """
     def __init__(self, bucket, access_key, secret_key):
+        """
+        Create a new context manager for interfacing with S3.
+
+        :param bucket: An S3 bucket
+        :param access_key: An AWS access key (eg. AEIFKEKWEFJFWA)
+        :param secret_key: An AWS secret key.
+        """
         self.bucket = bucket
         self.access_key = access_key
         self.secret_key = secret_key
         validate_values(validation_func=lambda value: value is not None, dic=locals())
         self.netloc = '{}.s3.amazonaws.com'.format(bucket)
         self.mode = None
-        self.remote_file_exits = False
+        self.acl = 'public-read'
 
         # File like attributes
         self.object_key = ''
@@ -78,10 +91,18 @@ class OpenS3(object):
         self._mimetype = None
         self.headers = {}
 
-    def __call__(self, object_key, mode='r', mimetype=None):
+    def __call__(self, object_key, mode='r', mimetype=None, acl='public-read'):
+        """
+        Configure :py:class:`OpenS3` object to write to a specific file in S3.
+
+        :param object_key:
+        :param mode:
+        :param mimetype:
+        """
         self.mode = mode
         self.object_key = object_key
         self.mimetype = mimetype
+        self.acl = acl
         return self
 
     def __enter__(self):
@@ -96,16 +117,22 @@ class OpenS3(object):
     def read(self):
         """
         Return a bytes object with the contents of the remote S3 object.
-        :return:
+
         :rtype bytes:
         """
         self._get()
         return self.buffer
 
     def write(self, content):
+        """
+        Write content to file in S3.
+
+        :param content:
+        """
         if self.mode != 'w':
             raise RuntimeError('Must open file in write mode to write to file.')
         self.buffer = content
+        # TODO handle multiple writes to same file.
 
     @property
     def mimetype(self):
@@ -135,7 +162,6 @@ class OpenS3(object):
     def size(self):
         """
         Return the size of the buffer, in bytes.
-        :return:
         """
         return len(self.buffer)  # TODO is the right way to get size of buffer (bytes)
 
@@ -189,14 +215,7 @@ class OpenS3(object):
     def _put(self):
         """PUT contents of file to remote S3 object."""
 
-        post_params = {
-            'file_size': self.size,
-            'file_hash': self.md5hash,
-            'content_type': self.mimetype,
-        }
-
-        request_headers = self._build_request_headers('PUT', self.object_key,
-                                                      post_params=post_params)
+        request_headers = self._build_request_headers('PUT', self.object_key)
 
         with closing(HTTPConnection(self.netloc)) as conn:
             conn.request('PUT', self.object_key, self.buffer, headers=request_headers)
@@ -211,6 +230,9 @@ class OpenS3(object):
                     '{}'.format(response.status, response.reason, response.read()))
 
     def delete(self):
+        """
+        Remove file from its S3 bucket.
+        """
         headers = self._build_request_headers('DELETE', self.object_key)
         with closing(HTTPConnection(self.netloc)) as conn:
             conn.request('DELETE', self.object_key, headers=headers)
@@ -224,6 +246,9 @@ class OpenS3(object):
                     '{}'.format(response.status, response.reason, response.read()))
 
     def exists(self):
+        """
+        Return ``True`` if file exists in S3 bucket.
+        """
         response = self._head()
         if response.status in (200, 404):
             return response.status == 200
@@ -247,37 +272,25 @@ class OpenS3(object):
         ).digest()
         return b64_string(digest)
 
-    def _build_request_headers(self, method, object_key, post_params=None):
+    def _build_request_headers(self, method, object_key):
         headers = dict()
-        timestamp = format_date_time(datetime.now().timestamp())
-        headers['Date'] = timestamp
 
-        string_to_sign_list = [method]
+        headers['Date'] = format_date_time(datetime.now().timestamp())
+        headers['Content-Length'] = self.size
+        headers['Content-MD5'] = self.md5hash
+        headers['Content-Type'] = self.mimetype
+        headers['x-amz-acl'] = self.acl
 
-        if post_params:
-            headers['Content-Length'] = post_params['file_size']
-            headers['Content-MD5'] = post_params['file_hash']
-            headers['Content-Type'] = post_params['content_type']
-            headers['x-amz-acl'] = 'public-read'
-
-            string_to_sign_list += [
+        if self.access_key and self.secret_key:
+            string_to_sign_list = [
+                method,
                 headers['Content-MD5'],
                 headers['Content-Type'],
                 headers['Date'],
-                'x-amz-acl:public-read'
+                'x-amz-acl:{}'.format(headers['x-amz-acl']),
+                '/' + self.bucket + object_key
             ]
-        else:
-            string_to_sign_list += [
-                '',
-                '',
-                timestamp
-            ]
-
-        string_to_sign_list.append('/' + self.bucket + object_key)
-
-        signature = self._request_signature('\n'.join(string_to_sign_list))
-
-        if self.access_key and self.secret_key:
+            signature = self._request_signature('\n'.join(string_to_sign_list))
             headers['Authorization'] = ''.join(['AWS' + ' ', self.access_key, ':', signature])
 
         return headers

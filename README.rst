@@ -1,12 +1,10 @@
 openS3
 ======
 
-Python 3 & AWS S3
+|docs| |tests|
 
-Status
-------
+A Pythonic way to upload and download from AWS S3.
 
-|docs|
 
 Installation
 ============
@@ -14,6 +12,13 @@ Installation
 ::
 
    $ pip install openS3
+
+To install the latest development version::
+
+    $ git clone git@github.com:logston/openS3.git
+    $ cd openS3
+    $ python setup.py install
+
 
 Usage
 =====
@@ -45,3 +50,6 @@ Further documentation can be found on `Read the Docs`_.
     :alt: Documentation Status
     :scale: 100%
     :target: http://opens3.readthedocs.org/en/latest/
+
+.. |tests| image:: https://travis-ci.org/logston/openS3.svg
+    :target: https://travis-ci.org/logston/openS3
