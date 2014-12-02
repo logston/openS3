@@ -1,7 +1,7 @@
 # get keys, bucket name, and encoding from env
 ENCODING = 'utf-8'
 
-MEDIA_TYPES = {
+CONTENT_TYPES = {
     "bmp": "image/bmp",
     "css": "text/css",
     "gif": "image/gif",
@@ -21,8 +21,9 @@ MEDIA_TYPES = {
 AWS_DATETIME_FORMAT = '%a, %d %b %Y %X %Z'
 
 VALID_MODES = {
-    'read': 'r',
-    'write': 'w',
-    'append': 'a',
-    'read-write': 'r+'
+    'rb': 'read',
+    'wb': 'write',
+    'ab': 'append'
 }
+
+DEFAULT_CONTENT_TYPE = 'binary/octet-stream'

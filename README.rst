@@ -28,7 +28,7 @@ Usage
     >>> from openS3 import OpenS3
     >>>
     >>> openS3 = OpenS3('my_bucket', '<access_key>', '<secret_key>')
-    ... with openS3('/my/object/key.txt', mode='w') as fd:
+    ... with openS3('/my/object/key.txt', mode='wb') as fd:
     ...     fd.write('Yeah! Files going up to S3!')
     >>>
     >>> # Let's create a new OpenS3 object so we know we are not
@@ -38,6 +38,11 @@ Usage
     ...     print(fd.read())
     b'Yeah! Files going up to S3!'
 
+Bug Tracker
+===========
+
+Please report bugs!!
+`Report bugs at openS3's GitHub repo <https://github.com/logston/openS3/issues>`_.
 
 Further Documentation
 =====================

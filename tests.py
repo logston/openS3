@@ -23,10 +23,10 @@ class OpenS3TestCase(unittest.TestCase):
         # TODO
         pass
 
-    def test__mimetype(self):
+    def test_content_type(self):
         openS3 = OpenS3(bucket, access_key, secret_key)
         with openS3(self.object_key) as fd:
-            self.assertEqual(fd.mimetype, 'text/plain')
+            self.assertEqual(fd.content_type, 'text/plain')
 
     def test__101_head_file_does_not_exist(self):
         openS3 = OpenS3(bucket, access_key, secret_key)
@@ -35,7 +35,7 @@ class OpenS3TestCase(unittest.TestCase):
 
     def test__102_put_object_in_bucket(self):
         openS3 = OpenS3(bucket, access_key, secret_key)
-        with openS3(self.object_key, mode='w') as fd:
+        with openS3(self.object_key, mode='wb') as fd:
             fd.write(self.content)
 
     def test__301_head_file_does_exist(self):
@@ -69,10 +69,10 @@ class OpenS3LargeFileTestCase(unittest.TestCase):
         ])
         self.object_key = '/testdir/large_test.txt'
 
-    def test__mimetype(self):
+    def test_content_type(self):
         openS3 = OpenS3(bucket, access_key, secret_key)
         with openS3(self.object_key) as fd:
-            self.assertEqual(fd.mimetype, 'text/plain')
+            self.assertEqual(fd.content_type, 'text/plain')
 
     def test__101_head_file_does_not_exist(self):
         openS3 = OpenS3(bucket, access_key, secret_key)
@@ -81,7 +81,7 @@ class OpenS3LargeFileTestCase(unittest.TestCase):
 
     def test__102_put_object_in_bucket(self):
         openS3 = OpenS3(bucket, access_key, secret_key)
-        with openS3(self.object_key, mode='w') as fd:
+        with openS3(self.object_key, mode='wb') as fd:
             fd.write(self.content)
 
     def test__301_head_file_does_exist(self):
