@@ -1,4 +1,4 @@
-from .utils import OpenS3
+from .ctx_manager import OpenS3
 
 __author__ = 'Paul Logston'
 __email__ = 'code@logston.me'
