@@ -19,6 +19,7 @@ Indices and Tables
 .. toctree::
    :maxdepth: 2
 
+   ctx_manager
    testing
    changelog
    utils
