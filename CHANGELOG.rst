@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.2.0
+-----
+
+- Added ability to list contents of a "directory" on AWS S3. Directories in the context of OpenS3
+  are object keys that end in a slash. Eg. "/static/css/"
+
 0.1.5
 -----
 
