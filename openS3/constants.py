@@ -27,3 +27,10 @@ VALID_MODES = {
 }
 
 DEFAULT_CONTENT_TYPE = 'binary/octet-stream'
+
+OBJECT_URL_SCHEME = 'http'
+
+# http://docs.aws.amazon.com/general/latest/gr/rande.html#s3_region
+AWS_S3_REGION = 'us-east-1'
+
+AWS_S3_SERVICE = 's3'

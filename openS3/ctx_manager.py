@@ -8,11 +8,12 @@ import urllib.parse
 from wsgiref.handlers import format_date_time
 
 from .constants import (
-    CONTENT_TYPES, ENCODING, VALID_MODES, DEFAULT_CONTENT_TYPE
-)
+    CONTENT_TYPES, ENCODING, VALID_MODES, DEFAULT_CONTENT_TYPE, OBJECT_URL_SCHEME,
+    AWS_S3_REGION, AWS_DATETIME_FORMAT, AWS_S3_SERVICE)
 from .utils import (
-    validate_values, b64_string, S3FileDoesNotExistError, S3IOError
-)
+    validate_values, b64_string, S3FileDoesNotExistError, S3IOError,
+    get_canonical_query_string, get_canonical_headers_string, strftime_iso8601_utc,
+    get_signing_key, hmac_sha256, uri_encode)
 
 
 class OpenS3(object):
@@ -39,7 +40,7 @@ class OpenS3(object):
         self.object_key = ''
         self.buffer = ''
         self._content_type = None
-        self.headers = {}
+        self.response_headers = {}
         self.extra_request_headers = {}
 
     def __call__(self, *args, **kwargs):
@@ -117,6 +118,8 @@ class OpenS3(object):
             # TODO Does the old file need to be deleted
             # TODO from S3 before we write over it?
             self._put()
+        # Reset OpenS3 object
+        self.__init__(self.bucket, self.access_key, self.secret_key)
 
     @property
     def content_type(self):
@@ -126,6 +129,10 @@ class OpenS3(object):
         """
         if self._content_type:
             return self._content_type
+
+        # Check the response headers
+        if 'Content-Type' in self.response_headers:
+            return self.response_headers['Content-Type']
 
         content_type = DEFAULT_CONTENT_TYPE
         # get file extension
@@ -147,12 +154,15 @@ class OpenS3(object):
         """
         Return the size of the buffer, in bytes.
         """
+        # The file hasn't been retrieved from AWS, retrieve it.
+        if not self.buffer and not self.response_headers:
+            self._get()
         return len(self.buffer)  # TODO is this the right way to get size of buffer (bytes)?
 
     @property
     def url(self):
         """Return URL of resource"""
-        scheme = 'http'
+        scheme = OBJECT_URL_SCHEME
         path = self.object_key
         query = ''
         fragment = ''
@@ -170,6 +180,7 @@ class OpenS3(object):
         with closing(HTTPConnection(self.netloc)) as conn:
             conn.request('HEAD', self.url, headers=request_headers)
             response = conn.getresponse()
+            self.response_headers = response.headers
             return response
 
     def _get(self):
@@ -194,17 +205,14 @@ class OpenS3(object):
                     '{}'.format(response.status, response.reason, response.read()))
 
             self.buffer = response.read()
-            self.headers = response.headers
+            self.response_headers = response.headers
 
     def _put(self):
         """PUT contents of file to remote S3 object."""
-
         request_headers = self._build_request_headers('PUT', self.object_key)
-
         with closing(HTTPConnection(self.netloc)) as conn:
             conn.request('PUT', self.object_key, self.buffer, headers=request_headers)
             response = conn.getresponse()
-
             if response.status not in (200,):
                 raise S3IOError(
                     'openS3 PUT error. '
@@ -228,6 +236,8 @@ class OpenS3(object):
                     'Reason: {}. '
                     'Response Text: \n'
                     '{}'.format(response.status, response.reason, response.read()))
+        # Reset OpenS3 object
+        self.__init__(self.bucket, self.access_key, self.secret_key)
 
     def exists(self):
         """
@@ -242,6 +252,90 @@ class OpenS3(object):
             'Reason: {}. '
             'Response Text: \n'
             '{}'.format(response.status, response.reason, response.read()))
+
+    def listdir(self):
+        # Any mode besides 'rb' doesn't make sense when listing a
+        # directory's contents.
+        if self.mode != 'rb':
+            raise ValueError('Mode must be "rb" when calling listdir.')
+        # Ensure that self.object_key has the structure of a path,
+        # rather than a file.
+        if self.object_key[-1] != '/':
+            raise ValueError('listdir can only operate on directories (ie. object keys that '
+                             'end in "/"). Given key: {}'.format(self.object_key))
+
+        datetime_now = datetime.now()
+        iso_8601_timestamp = strftime_iso8601_utc(datetime_now.timestamp())
+        query_string_dict = {}
+        header_dict = {
+            'Host': self.netloc,
+            'x-amz-date': iso_8601_timestamp,
+            'x-amz-content-sha256': hashlib.sha256(''.encode()).hexdigest()
+        }
+
+        # Get Canonical Request
+        http_verb = 'GET'
+        canonical_uri = uri_encode('/')
+        canonical_query_string = get_canonical_query_string(query_string_dict)
+        canonical_headers = get_canonical_headers_string(header_dict) + '\n'
+        signed_headers = ';'.join(header for header in sorted(header_dict.keys())).lower()
+        hashed_payload = hashlib.sha256(''.encode()).hexdigest()
+        canonical_request = '\n'.join((
+            http_verb,
+            canonical_uri,
+            canonical_query_string,
+            canonical_headers,
+            signed_headers,
+            hashed_payload
+        ))
+
+        # Get StringToSign
+        request_scope = ('{date}/{aws_region}/{aws_service}/aws4_request'
+                         ''.format(date=datetime_now.strftime('%Y%m%d'),
+                                   aws_region=AWS_S3_REGION,
+                                   aws_service=AWS_S3_SERVICE))
+        canonical_request_hash = hashlib.sha256(canonical_request.encode("utf-8")).hexdigest()
+        string_to_sign = '\n'.join((
+            'AWS4-HMAC-SHA256',
+            iso_8601_timestamp,
+            request_scope,
+            canonical_request_hash
+        ))
+
+        # Get SigningKey
+        signing_key = get_signing_key(self.secret_key,
+                                      datetime_now.strftime('%Y%m%d'),
+                                      AWS_S3_REGION,
+                                      AWS_S3_SERVICE)
+
+        # Get Signature
+        signature = hmac_sha256(signing_key, string_to_sign, digest=False).hexdigest()
+
+        credential_str = '{access_key}/{scope}'.format(access_key=self.access_key,
+                                                       scope=request_scope)
+        authorization_str = ('AWS4-HMAC-SHA256 Credential={credential_str},'
+                             'SignedHeaders={header_str},Signature={signature}'
+                             ''.format(credential_str=credential_str,
+                                       header_str=signed_headers,
+                                       signature=signature))
+        header_dict['Authorization'] = authorization_str
+
+        # Build query string
+        query_string = '?' + canonical_query_string if canonical_query_string else ''
+        path = '/{}'.format(query_string)
+
+        # Run query
+        with closing(HTTPConnection(self.netloc)) as conn:
+            conn.request('GET', path, headers=header_dict)
+            response = conn.getresponse()
+            if response.status not in (204,):
+                raise S3IOError(
+                    'openS3 GET error during listdir. '
+                    'Response status: {}. '
+                    'Reason: {}. '
+                    'Response Text: \n'
+                    '{}'.format(response.status, response.reason, response.read()))
+            return response
 
     def _request_signature(self, string_to_sign):
         """
@@ -259,7 +353,10 @@ class OpenS3(object):
         headers = dict()
 
         headers['Date'] = format_date_time(datetime.now().timestamp())
-        headers['Content-Length'] = self.size
+        # Only get size of file if there's data in the buffer.
+        # Else will have some run away recursion.
+        if self.buffer:
+            headers['Content-Length'] = self.size
         headers['Content-MD5'] = self.md5hash
         headers['Content-Type'] = self.content_type
         headers['x-amz-acl'] = self.acl

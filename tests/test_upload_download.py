@@ -3,7 +3,7 @@ from datetime import datetime
 
 from openS3 import OpenS3
 
-from .constants import BUCKET, ACCESS_KEY, SECRET_KEY
+from tests.constants import BUCKET, ACCESS_KEY, SECRET_KEY
 
 
 class OpenS3TestCase(unittest.TestCase):
@@ -44,12 +44,13 @@ class OpenS3TestCase(unittest.TestCase):
         with openS3(self.object_key) as fd:
             content = fd.read().decode()
             self.assertEqual(content, self.content)
-            self.assertEqual(fd.headers['Content-Type'], 'text/plain')
+            self.assertEqual(fd.response_headers['Content-Type'], 'text/plain')
 
     def test__701_delete_object_from_bucket(self):
         openS3 = OpenS3(BUCKET, ACCESS_KEY, SECRET_KEY)
         with openS3(self.object_key) as fd:
             fd.delete()
+        with openS3(self.object_key) as fd:
             self.assertFalse(fd.exists())
 
 
@@ -85,17 +86,23 @@ class OpenS3LargeFileTestCase(unittest.TestCase):
         with openS3(self.object_key) as fd:
             self.assertTrue(fd.exists())
 
+    def test__401_list_dir(self):
+        openS3 = OpenS3(BUCKET, ACCESS_KEY, SECRET_KEY)
+        with openS3('/') as fd:
+            fd.listdir()
+
     def test__501_get_object_from_bucket(self):
         openS3 = OpenS3(BUCKET, ACCESS_KEY, SECRET_KEY)
         with openS3(self.object_key) as fd:
             content = fd.read().decode()
             self.assertEqual(content, self.content)
-            self.assertEqual(fd.headers['Content-Type'], 'text/plain')
+            self.assertEqual(fd.response_headers['Content-Type'], 'text/plain')
 
     def test__701_delete_object_from_bucket(self):
         openS3 = OpenS3(BUCKET, ACCESS_KEY, SECRET_KEY)
         with openS3(self.object_key) as fd:
             fd.delete()
+        with openS3(self.object_key) as fd:
             self.assertFalse(fd.exists())
 
 

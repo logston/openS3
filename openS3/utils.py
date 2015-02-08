@@ -1,6 +1,9 @@
 from base64 import b64encode
 from datetime import datetime
+import hashlib
+import hmac
 import re
+import time
 
 from .constants import ENCODING, AWS_DATETIME_FORMAT
 
@@ -42,6 +45,47 @@ def strpawstime(timestamp):
     AWS Datetime Format:  Wed, 28 Oct 2009 22:32:00 GMT
     """
     return datetime.strptime(timestamp, AWS_DATETIME_FORMAT)
+
+
+def strftime_iso8601_utc(timestamp):
+    year, month, day, hh, mm, ss, wd, y, z = time.gmtime(timestamp)
+    return ('{year}{month}{day}T{hour}{minute}{second}Z'
+            ''.format(year=year, month=month, day=day, hour=hh, minute=mm, second=ss))
+
+
+def get_canonical_query_string(query_string_dict):
+    query_pairs = sorted(query_string_dict.items())
+    query_strings = [uri_encode(p) + '=' + uri_encode(v) for p, v in query_pairs]
+    return '&'.join(query_strings)
+
+
+def get_canonical_headers_string(header_dict):
+    header_pairs = sorted(header_dict.items())
+    header_strings = [h.lower() + ':' + v.strip() for h, v in header_pairs]
+    return '\n'.join(header_strings)
+
+
+def uri_encode(string):
+    return string
+
+
+# Source for function:
+# http://docs.aws.amazon.com/general/latest/gr/signature-v4-examples.html#signature-v4-examples-python
+def hmac_sha256(key, msg, digest=True):
+    m = hmac.new(key, msg.encode("utf-8"), hashlib.sha256)
+    if digest:
+        return m.digest()
+    return m
+
+
+# Source for function:
+# http://docs.aws.amazon.com/general/latest/gr/signature-v4-examples.html#signature-v4-examples-python
+def get_signing_key(secret_key, date_stamp, region_name, service_name):
+    k_date = hmac_sha256(("AWS4" + secret_key).encode("utf-8"), date_stamp)
+    k_region = hmac_sha256(k_date, region_name)
+    k_service = hmac_sha256(k_region, service_name)
+    k_signing = hmac_sha256(k_service, "aws4_request")
+    return k_signing
 
 
 class S3IOError(IOError):
