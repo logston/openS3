@@ -9,10 +9,10 @@ from wsgiref.handlers import format_date_time
 
 from .constants import (
     CONTENT_TYPES, ENCODING, VALID_MODES, DEFAULT_CONTENT_TYPE, OBJECT_URL_SCHEME,
-    AWS_S3_REGION, AWS_DATETIME_FORMAT, AWS_S3_SERVICE)
+    AWS_S3_REGION, AWS_S3_SERVICE)
 from .utils import (
     validate_values, b64_string, S3FileDoesNotExistError, S3IOError,
-    get_canonical_query_string, get_canonical_headers_string, strftime_iso8601_utc,
+    get_canonical_query_string, get_canonical_headers_string,
     get_signing_key, hmac_sha256, uri_encode)
 
 
@@ -191,7 +191,7 @@ class OpenS3(object):
         with closing(HTTPConnection(self.netloc)) as conn:
             conn.request('GET', self.object_key, headers=request_headers)
             response = conn.getresponse()
-            if response.status not in (200,):
+            if response.status not in (200, 204):
                 if response.length is None:
                     # length == None seems to be returned from GET requests
                     # to non-existing files
@@ -213,7 +213,7 @@ class OpenS3(object):
         with closing(HTTPConnection(self.netloc)) as conn:
             conn.request('PUT', self.object_key, self.buffer, headers=request_headers)
             response = conn.getresponse()
-            if response.status not in (200,):
+            if response.status not in (200, 204):
                 raise S3IOError(
                     'openS3 PUT error. '
                     'Response status: {}. '
@@ -229,7 +229,7 @@ class OpenS3(object):
         with closing(HTTPConnection(self.netloc)) as conn:
             conn.request('DELETE', self.object_key, headers=headers)
             response = conn.getresponse()
-            if response.status not in (204,):
+            if response.status not in (200, 204):
                 raise S3IOError(
                     'openS3 DELETE error. '
                     'Response status: {}. '
@@ -264,8 +264,8 @@ class OpenS3(object):
             raise ValueError('listdir can only operate on directories (ie. object keys that '
                              'end in "/"). Given key: {}'.format(self.object_key))
 
-        datetime_now = datetime.now()
-        iso_8601_timestamp = strftime_iso8601_utc(datetime_now.timestamp())
+        datetime_now = datetime.utcnow()
+        iso_8601_timestamp = datetime_now.strftime('%Y%m%dT%H%M%SZ')
         query_string_dict = {}
         header_dict = {
             'Host': self.netloc,
@@ -328,7 +328,7 @@ class OpenS3(object):
         with closing(HTTPConnection(self.netloc)) as conn:
             conn.request('GET', path, headers=header_dict)
             response = conn.getresponse()
-            if response.status not in (204,):
+            if response.status not in (200, 204):
                 raise S3IOError(
                     'openS3 GET error during listdir. '
                     'Response status: {}. '

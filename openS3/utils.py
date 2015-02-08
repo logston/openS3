@@ -47,12 +47,6 @@ def strpawstime(timestamp):
     return datetime.strptime(timestamp, AWS_DATETIME_FORMAT)
 
 
-def strftime_iso8601_utc(timestamp):
-    year, month, day, hh, mm, ss, wd, y, z = time.gmtime(timestamp)
-    return ('{year}{month}{day}T{hour}{minute}{second}Z'
-            ''.format(year=year, month=month, day=day, hour=hh, minute=mm, second=ss))
-
-
 def get_canonical_query_string(query_string_dict):
     query_pairs = sorted(query_string_dict.items())
     query_strings = [uri_encode(p) + '=' + uri_encode(v) for p, v in query_pairs]
