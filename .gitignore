@@ -56,5 +56,8 @@ target/
 # PyCharm
 .idea
 
+# Vim
+.swp
+
 # openS3
 env.sh

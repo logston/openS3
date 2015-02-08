@@ -3,7 +3,7 @@ from datetime import datetime
 import hashlib
 import hmac
 import re
-import time
+from urllib import parse
 
 from .constants import ENCODING, AWS_DATETIME_FORMAT
 
@@ -60,7 +60,7 @@ def get_canonical_headers_string(header_dict):
 
 
 def uri_encode(string):
-    return string
+    return parse.quote(string)
 
 
 # Source for function:
@@ -80,6 +80,29 @@ def get_signing_key(secret_key, date_stamp, region_name, service_name):
     k_service = hmac_sha256(k_region, service_name)
     k_signing = hmac_sha256(k_service, "aws4_request")
     return k_signing
+
+
+def get_dirs_and_files(key_list, prefix):
+    """
+    Return a 2-tuple of sets. The first set in the 2-tuple
+    contains directory names and the second set contains files names.
+
+    Example with an object_key of /static/. The leading slash from /
+    get_dirs_and_files('/static/', ['static/css/ads.css', 'static/js/main.js', 'static/robots.txt'])
+    {'css', 'js'} {'robots.txt'}
+    """
+    dirs = set()
+    files = set()
+    prefix = prefix.lstrip('/')
+    prefix_len = len(prefix)
+    for key in key_list:
+        if key.startswith(prefix):
+            key = key[prefix_len:]
+        if '/' in key:
+            dirs.add(key.split('/')[0])
+        else:
+            files.add(key)
+    return dirs, files
 
 
 class S3IOError(IOError):

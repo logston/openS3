@@ -86,11 +86,6 @@ class OpenS3LargeFileTestCase(unittest.TestCase):
         with openS3(self.object_key) as fd:
             self.assertTrue(fd.exists())
 
-    def test__401_list_dir(self):
-        openS3 = OpenS3(BUCKET, ACCESS_KEY, SECRET_KEY)
-        with openS3('/') as fd:
-            fd.listdir()
-
     def test__501_get_object_from_bucket(self):
         openS3 = OpenS3(BUCKET, ACCESS_KEY, SECRET_KEY)
         with openS3(self.object_key) as fd:
@@ -104,6 +99,52 @@ class OpenS3LargeFileTestCase(unittest.TestCase):
             fd.delete()
         with openS3(self.object_key) as fd:
             self.assertFalse(fd.exists())
+
+
+class ListdirTestCase(unittest.TestCase):
+    def test_list_dir(self):
+        object_keys = {'/static/css/app.css',
+                       '/static/css/admin.css',
+                       '/static/js/app.js',
+                       '/static/js/admin.js',
+                       '/static/js/on_boarding.js',
+                       '/static/robots.txt',
+                       '/config.txt'}
+        opener = OpenS3(BUCKET, ACCESS_KEY, SECRET_KEY)
+        # Write empty files so we have something in our listdir results
+        for object_key in object_keys:
+            with opener(object_key, mode='wb') as fd:
+                fd.write('blah')
+            with opener(object_key) as fd:
+                self.assertTrue(fd.exists())
+
+        with opener('/') as fd:
+            dirs, files = fd.listdir()
+            self.assertEqual(dirs, {'static'})
+            self.assertEqual(files, {'config.txt'})
+
+        with opener('/static/') as fd:
+            dirs, files = fd.listdir()
+            self.assertEqual(dirs, {'css', 'js'})
+            self.assertEqual(files, {'robots.txt'})
+
+        with opener('/static/css/') as fd:
+            with self.assertRaises(NotImplementedError):
+                dirs, files = fd.listdir()
+                self.assertEqual(dirs, {})
+                self.assertEqual(files, {'app.css', 'admin.css'})
+
+        with opener('/static/js/') as fd:
+            with self.assertRaises(NotImplementedError):
+                dirs, files = fd.listdir()
+                self.assertEqual(dirs, {})
+                self.assertEqual(files, {'app.js', 'admin.js', 'on_boarding.js'})
+
+    def test_cannot_listdir_on_file(self):
+        opener = OpenS3(BUCKET, ACCESS_KEY, SECRET_KEY)
+        with opener('/static') as fd:
+            with self.assertRaises(ValueError):
+                fd.listdir()
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ from http.client import HTTPConnection
 import os
 import urllib.parse
 from wsgiref.handlers import format_date_time
+from xml.etree import ElementTree
 
 from .constants import (
     CONTENT_TYPES, ENCODING, VALID_MODES, DEFAULT_CONTENT_TYPE, OBJECT_URL_SCHEME,
@@ -13,7 +14,7 @@ from .constants import (
 from .utils import (
     validate_values, b64_string, S3FileDoesNotExistError, S3IOError,
     get_canonical_query_string, get_canonical_headers_string,
-    get_signing_key, hmac_sha256, uri_encode)
+    get_signing_key, hmac_sha256, uri_encode, get_dirs_and_files)
 
 
 class OpenS3(object):
@@ -254,6 +255,11 @@ class OpenS3(object):
             '{}'.format(response.status, response.reason, response.read()))
 
     def listdir(self):
+        """
+        Return a 2-tuple of directories and files in ``object_key``.
+
+        :rtype: tuple
+        """
         # Any mode besides 'rb' doesn't make sense when listing a
         # directory's contents.
         if self.mode != 'rb':
@@ -264,9 +270,19 @@ class OpenS3(object):
             raise ValueError('listdir can only operate on directories (ie. object keys that '
                              'end in "/"). Given key: {}'.format(self.object_key))
 
+        if self.object_key[-1] != '/':
+            raise ValueError('listdir can only operate on directories (ie. object keys that '
+                             'end in "/"). Given key: {}'.format(self.object_key))
+
+        if '/' in self.object_key.strip('/'):
+            raise NotImplementedError('Listing subdirectories of bucket is not supported.')
+
         datetime_now = datetime.utcnow()
         iso_8601_timestamp = datetime_now.strftime('%Y%m%dT%H%M%SZ')
-        query_string_dict = {}
+        # Strip slashes from object_key. AWS doesn't like leading/trailing slashes
+        # in the value associated with the prefix parameter.
+        prefix = self.object_key.strip('/')
+        query_string_dict = {'prefix': prefix} if prefix else {}
         header_dict = {
             'Host': self.netloc,
             'x-amz-date': iso_8601_timestamp,
@@ -328,6 +344,7 @@ class OpenS3(object):
         with closing(HTTPConnection(self.netloc)) as conn:
             conn.request('GET', path, headers=header_dict)
             response = conn.getresponse()
+            response_body = response.read()
             if response.status not in (200, 204):
                 raise S3IOError(
                     'openS3 GET error during listdir. '
@@ -335,7 +352,16 @@ class OpenS3(object):
                     'Reason: {}. '
                     'Response Text: \n'
                     '{}'.format(response.status, response.reason, response.read()))
-            return response
+
+        root = ElementTree.fromstring(response_body)
+        # Work around xml namespace.
+        aws_xmlns_namespace = root.tag.rstrip('ListBucketResult').strip('{}')
+        namespaces = {'aws': aws_xmlns_namespace}
+        key_element_list = root.findall('aws:Contents/aws:Key', namespaces)
+        key_list = [k.text for k in key_element_list]
+        # Strip leading slash from object_key since we need to match against
+        # the keys without leading slashes that AWS returns.
+        return get_dirs_and_files(key_list, self.object_key)
 
     def _request_signature(self, string_to_sign):
         """
